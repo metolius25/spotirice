@@ -19,7 +19,7 @@ While you can actually click on the buttons too, here are the assigned keybindin
 
 
 
-> **Note**: Spotirice is intended to run on Linux, preferably with riced desktops . However it is possible for the app to run on Windows and MacOS if there is an instance of Spotify running on the device although functionality is not guaranteed as I haven't tested them on these platforms.
+> **Note**: An instance of Spotify must be running in a device that your authorized account is connected to (It is possible to use the app to control Spotify running on your mobile phone too.). 
 
 ### Installation
 
@@ -71,6 +71,8 @@ error = "#ff0000" # red
 - Separate screen for searching songs and playlists 🔲
 - Separate screen to view playlists 🔲
 - Edit song queue 🔲
+- Playing device selector 🔲
+- Cross-platform support. (As of now only Linux is supported) 🔲
   
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
