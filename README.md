@@ -69,7 +69,7 @@ error = "#ff0000" # red
 - Like/unlike songs ✅
 - Volume control 🔲
 - Separate screen for searching songs and playlists 🔲
-- Separate screen to view playlists
+- Separate screen to view playlists 🔲
 - Edit song queue 🔲
   
 
