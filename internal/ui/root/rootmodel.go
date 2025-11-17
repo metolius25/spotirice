@@ -27,6 +27,8 @@ type playerStateMsg struct {
 	ProgressMs int
 	DurationMs int
 	Playing    bool
+	ID         spotify.ID
+	Liked      bool
 }
 
 type RootModel struct {
@@ -41,6 +43,9 @@ type RootModel struct {
 	durationMs int
 	isPlaying  bool
 	hasInitialState bool
+	currentTrackID  spotify.ID
+	trackIsLiked    bool
+
 
 
 	// search state
@@ -68,28 +73,33 @@ func tickCmd() tea.Cmd {
 }
 
 func pollStateCmd(c *spotify.Client) tea.Cmd {
-	return func() tea.Msg {
-		ctx := context.Background()
-		state, err := c.PlayerState(ctx)
-		if err != nil || state == nil || state.Item == nil {
-			// silently ignore; keep last known state
-			return nil
-		}
+    return func() tea.Msg {
+        ctx := context.Background()
+        state, err := c.PlayerState(ctx)
+        if err != nil || state == nil || state.Item == nil {
+            return nil
+        }
 
-		track := state.Item
-		artist := ""
-		if len(track.Artists) > 0 {
-			artist = track.Artists[0].Name
-		}
+        track := state.Item
+        artist := ""
+        if len(track.Artists) > 0 {
+            artist = track.Artists[0].Name
+        }
 
-		return playerStateMsg{
-			TrackName:  track.Name,
-			ArtistName: artist,
-			ProgressMs: int(state.Progress),
-			DurationMs: int(track.Duration),
-			Playing:    state.Playing,
-		}
-	}
+        // check if liked
+        liked, _ := c.UserHasTracks(ctx, track.ID)
+
+        return playerStateMsg{
+            TrackName:  track.Name,
+            ArtistName: artist,
+            ProgressMs: int(state.Progress),
+            DurationMs: int(track.Duration),
+            Playing:    state.Playing,
+            // new:
+            ID:         track.ID,
+            Liked:      len(liked) > 0 && liked[0],
+        }
+    }
 }
 
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -121,6 +131,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, prevCmd(m.client)
 
+		
+    	case "l":
+            if m.currentTrackID != "" {
+                return m, toggleLikeCmd(m.client, m.currentTrackID, m.trackIsLiked)
+            }
+			
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
@@ -141,15 +157,24 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if msg.Y == controlRow && m.client != nil {
 			// 2. Calculate the X position of the controls string
+			heart := "♡"
+        	if m.trackIsLiked {
+            	heart = "♥"
+        	}
+
+			
+			
 			playIcon := "▶"
 			if m.isPlaying {
 				playIcon = "⏸"
 			}
-			controlsText := fmt.Sprintf(" [ %s ]  [ ⏮ ]  [ ⏭ ] ", playIcon)
+			controlsText := fmt.Sprintf(" [ %s ]  [ ⏮ ]  [ ⏭ ]  [ %s ] ", playIcon, heart)
 			controlsWidth := lipgloss.Width(controlsText)
 
 			// Container width is terminal width minus borders
-			containerWidth := m.width - lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).GetHorizontalBorderSize()
+			containerWidth := m.width - lipgloss.NewStyle().
+            	Border(lipgloss.RoundedBorder()).
+            	GetHorizontalBorderSize()
 
 			// Controls are centered in the container
 			padding := (containerWidth - controlsWidth) / 2
@@ -172,9 +197,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case relativeX >= 15 && relativeX <= 19: // Next
 				return m, nextCmd(m.client)
+
+
+			case relativeX >= 22 && relativeX <= 26:   // heart
+            	if m.currentTrackID != "" {
+                	return m, toggleLikeCmd(m.client, m.currentTrackID, m.trackIsLiked)
+	
 			}
 		}
 
+	}
 	case tickMsg:
 		if m.client != nil && m.isPlaying && m.hasInitialState {
 			// Only smooth **after first real state**
@@ -195,9 +227,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.artistName = msg.ArtistName
 		m.progressMs = msg.ProgressMs
 		m.durationMs = msg.DurationMs
-		m.isPlaying = msg.Playing
-		m.hasInitialState = true
+		m.isPlaying  = msg.Playing
 
+		m.currentTrackID = msg.ID
+		m.trackIsLiked   = msg.Liked
 
 	case statusMsg:
 		m.status = string(msg)
@@ -262,7 +295,14 @@ func (m RootModel) View() string {
 	if m.isPlaying {
 		playIcon = "⏸"
 	}
-	controls := fmt.Sprintf(" [ %s ]  [ ⏮ ]  [ ⏭ ] ", playIcon)
+
+	// Like Song
+	heart := "♡"
+	if m.trackIsLiked {
+    	heart = "♥"
+	}
+
+	controls := fmt.Sprintf(" [ %s ]  [ ⏮ ]  [ ⏭ ]  [ %s ] ", playIcon, heart)
 
 	// Progress Bar
 	barLine := m.renderProgressLine()
@@ -453,4 +493,24 @@ func prevCmd(c *spotify.Client) tea.Cmd {
 		}
 		return statusMsg("Went back to previous track.")
 	}
+}
+
+func toggleLikeCmd(c *spotify.Client, trackID spotify.ID, currentlyLiked bool) tea.Cmd {
+    return func() tea.Msg {
+        ctx := context.Background()
+
+        if currentlyLiked {
+            // Remove from liked
+            if err := c.RemoveTracksFromLibrary(ctx, trackID); err != nil {
+                return errMsg{Err: err}
+            }
+            return statusMsg("Removed from Liked Songs.")
+        }
+
+        // Add to liked
+        if err := c.AddTracksToLibrary(ctx, trackID); err != nil {
+            return errMsg{Err: err}
+        }
+        return statusMsg("Added to Liked Songs.")
+    }
 }

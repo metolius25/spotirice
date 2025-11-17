@@ -28,7 +28,11 @@ func Authenticate() (*spotify.Client, error) {
 		spotifyauth.WithScopes(
 			spotifyauth.ScopeUserReadPrivate,
 			spotifyauth.ScopeUserReadPlaybackState,
+            spotifyauth.ScopeUserReadCurrentlyPlaying,
 			spotifyauth.ScopeUserModifyPlaybackState,
+            spotifyauth.ScopeUserLibraryRead,
+            spotifyauth.ScopeUserLibraryModify,
+
 		),
 		spotifyauth.WithClientID(creds.ClientID),
 		spotifyauth.WithClientSecret(creds.ClientSecret),
