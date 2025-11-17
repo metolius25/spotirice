@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/zmb3/spotify/v2"
@@ -16,6 +17,9 @@ import (
 type statusMsg string
 type errMsg struct{ Err error }
 type tickMsg struct{}
+type searchResultMsg struct {
+	Result *spotify.SearchResult
+}
 
 type playerStateMsg struct {
 	TrackName  string
@@ -36,6 +40,14 @@ type RootModel struct {
 	progressMs int
 	durationMs int
 	isPlaying  bool
+	hasInitialState bool
+
+
+	// search state
+	isSearching   bool
+	searchInput   textinput.Model
+	searchResults *spotify.SearchResult
+	searchCursor  int
 
 	width int
 }
@@ -119,32 +131,64 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		controlRow := 5
+		// --- Calculate control button positions ---
+		// This is a bit of a hack, but it's the most reliable way with the current
+		// view structure. We reconstruct the layout logic to find the button positions.
+
+		// 1. Calculate the Y position of the control row
+		// header(1) + container border(1) + trackInfo(2) + separator(1) + progress bar(1)
+		controlRow := 1 + 1 + 2 + 1 + 1
+
 		if msg.Y == controlRow && m.client != nil {
-			x := msg.X
+			// 2. Calculate the X position of the controls string
+			playIcon := "▶"
+			if m.isPlaying {
+				playIcon = "⏸"
+			}
+			controlsText := fmt.Sprintf(" [ %s ]  [ ⏮ ]  [ ⏭ ] ", playIcon)
+			controlsWidth := lipgloss.Width(controlsText)
+
+			// Container width is terminal width minus borders
+			containerWidth := m.width - lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).GetHorizontalBorderSize()
+
+			// Controls are centered in the container
+			padding := (containerWidth - controlsWidth) / 2
+
+			// 3. Get mouse X relative to the start of the controls string
+			relativeX := msg.X - padding
+
+			// 4. Check which button was clicked based on their hardcoded positions within the string
+			// " [ P ]  [ B ]  [ N ] "
+			//   1-5    8-12   15-19
 			switch {
-			case x >= 0 && x <= 4:
+			case relativeX >= 1 && relativeX <= 5: // Play/Pause
 				if m.isPlaying {
 					return m, pauseCmd(m.client)
 				}
 				return m, resumePlaybackCmd(m.client)
 
-			case x >= 8 && x <= 10:
+			case relativeX >= 8 && relativeX <= 12: // Previous
 				return m, prevCmd(m.client)
 
-			case x >= 14 && x <= 16:
+			case relativeX >= 15 && relativeX <= 19: // Next
 				return m, nextCmd(m.client)
 			}
 		}
 
 	case tickMsg:
-		if m.client == nil {
-			return m, tickCmd()
+		if m.client != nil && m.isPlaying && m.hasInitialState {
+			// Only smooth **after first real state**
+			m.progressMs += 1000
+			if m.progressMs > m.durationMs {
+				m.progressMs = m.durationMs
+			}
 		}
+
 		return m, tea.Batch(
 			pollStateCmd(m.client),
 			tickCmd(),
 		)
+
 
 	case playerStateMsg:
 		m.trackName = msg.TrackName
@@ -152,6 +196,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.progressMs = msg.ProgressMs
 		m.durationMs = msg.DurationMs
 		m.isPlaying = msg.Playing
+		m.hasInitialState = true
+
 
 	case statusMsg:
 		m.status = string(msg)
@@ -164,58 +210,88 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m RootModel) View() string {
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(m.colors.Header))
-	trackPlayingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(m.colors.TrackPlaying))
-	trackPausedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(m.colors.TrackPaused))
-	artistStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(m.colors.Artist))
-	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(m.colors.Error))
-	statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(m.colors.Status))
+	// Styles
+	headerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.colors.Header)).
+		Bold(true).
+		Padding(0, 1)
 
-	header := headerStyle.Render("== NOW PLAYING =======================================")
+	trackPlayingStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.colors.TrackPlaying)).
+		Bold(true)
 
-	// Track line
-	trackLine := "> (no track)"
-	artistLine := "  (no artist)"
+	trackPausedStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.colors.TrackPaused))
+
+	artistStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.colors.Artist))
+
+	errorStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.colors.Error)).
+		Bold(true)
+
+	statusStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.colors.Status))
+
+	containerStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(m.colors.Header))
+
+	// Header
+	header := headerStyle.Render(" Spotirice: CLI Spotify Controller")
+
+	// Track Info
+	trackLine := "No track playing"
+	artistLine := ""
 	if m.trackName != "" {
 		if m.isPlaying {
-			trackLine = "> " + trackPlayingStyle.Render(m.trackName)
+			trackLine = trackPlayingStyle.Render(m.trackName)
 		} else {
-			trackLine = "> " + trackPausedStyle.Render(m.trackName)
+			trackLine = trackPausedStyle.Render(m.trackName + " (paused)")
 		}
-	}
-	if m.artistName != "" {
-		artistLine = "  " + artistStyle.Render(m.artistName)
+		artistLine = artistStyle.Render(m.artistName)
 	}
 
-	// Status / info (bottom of header area)
-	statusLine := statusStyle.Render(m.status)
-	if strings.HasPrefix(m.status, "Error:") {
-		statusLine = errorStyle.Render(m.status)
-	}
+	trackInfo := lipgloss.JoinVertical(lipgloss.Left,
+		trackLine,
+		artistLine,
+	)
 
 	// Controls
 	playIcon := "▶"
 	if m.isPlaying {
 		playIcon = "⏸"
 	}
-	controlsLine := fmt.Sprintf("[ %s ]   [⏮]   [⏭]", playIcon)
+	controls := fmt.Sprintf(" [ %s ]  [ ⏮ ]  [ ⏭ ] ", playIcon)
 
-	// Progress bar (auto width)
+	// Progress Bar
 	barLine := m.renderProgressLine()
 
-	lines := []string{
-		header,
-		"",
-		trackLine,
-		artistLine,
-		"",
-		controlsLine,
-		barLine,
-		"",
-		statusLine,
+	// Status
+	statusLine := statusStyle.Render(m.status)
+	if strings.HasPrefix(m.status, "Error:") {
+		statusLine = errorStyle.Render(m.status)
 	}
 
-	return strings.Join(lines, "\n")
+	// Assembly
+	ui := lipgloss.JoinVertical(lipgloss.Center,
+		trackInfo,
+		"",
+		barLine,
+		controls,
+		"",
+		statusLine,
+	)
+
+	// Make it fit the container
+	w := m.width - containerStyle.GetHorizontalBorderSize()
+	h := lipgloss.Height(ui)
+	renderedUI := containerStyle.Width(w).Height(h).Render(ui)
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		header,
+		renderedUI,
+	)
 }
 
 func (m RootModel) renderProgressLine() string {
@@ -224,14 +300,14 @@ func (m RootModel) renderProgressLine() string {
 	}
 
 	progressStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(m.colors.ProgressBar))
+	emptyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(m.colors.Artist)) // Use a dimmer color
 
-	// Calculate bar width based on terminal width.
-	// Leave ~20 chars for timer and spacing.
 	w := m.width
 	if w <= 0 {
 		w = 80
 	}
-	barWidth := w - 20
+	// container border + padding + timer width
+	barWidth := w - 4 - 15
 	if barWidth < 10 {
 		barWidth = 10
 	}
@@ -250,13 +326,13 @@ func (m RootModel) renderProgressLine() string {
 	}
 	empty := barWidth - filled
 
-	left := strings.Repeat("─", filled)
-	right := strings.Repeat("·", empty)
+	left := progressStyle.Render(strings.Repeat("█", filled))
+	right := emptyStyle.Render(strings.Repeat("█", empty))
 
 	cur := formatTime(m.progressMs)
 	total := formatTime(m.durationMs)
 
-	return progressStyle.Render(fmt.Sprintf("%s%s  %s/%s", left, right, cur, total))
+	return fmt.Sprintf("%s %s/%s %s", cur, total, left, right)
 }
 
 func formatTime(ms int) string {
@@ -282,47 +358,51 @@ func NewRootModel(c *spotify.Client, colors *config.Colors) (RootModel, tea.Cmd)
 // ------------------ Commands ------------------
 
 func ensureActiveDevice(c *spotify.Client) error {
-	ctx := context.Background()
+    ctx := context.Background()
 
-	devices, err := c.PlayerDevices(ctx)
-	if err != nil {
-		return err
-	}
-	if len(devices) == 0 {
-		return fmt.Errorf("no devices found; open Spotify on a device")
-	}
+    devices, err := c.PlayerDevices(ctx)
+    if err != nil {
+        return err
+    }
+    if len(devices) == 0 {
+        return fmt.Errorf("no devices found; open Spotify on a device")
+    }
 
-	var device *spotify.PlayerDevice
-	for i := range devices {
-		d := &devices[i]
-		if d.Restricted {
-			continue
-		}
-		if d.Type != "Computer" && d.Type != "Smartphone" && d.Type != "Speaker" {
-			continue
-		}
-		if device == nil || d.Active {
-			device = d
-			if d.Active {
-				break
-			}
-		}
-	}
+    var active *spotify.PlayerDevice
+    var firstValid *spotify.PlayerDevice
 
-	if device == nil {
-		return fmt.Errorf("no controllable device found (avoid Web Player)")
-	}
+    for i := range devices {
+        d := &devices[i]
 
-	if !device.Active {
-		if err := c.TransferPlayback(ctx, device.ID, false); err != nil {
-			return err
-		}
-		// DO NOT auto-play — this causes "restriction violated"
-		return nil
-	}
+        if d.Restricted {
+            continue
+        }
+        if d.Type != "Computer" && d.Type != "Smartphone" && d.Type != "Speaker" {
+            continue
+        }
 
-	return nil
+        if firstValid == nil {
+            firstValid = d
+        }
+        if d.Active {
+            active = d
+            break
+        }
+    }
+
+    // If we already have an active device → DO NOT TRANSFER.
+    if active != nil {
+        return nil
+    }
+
+    // Only transfer when absolutely required.
+    if firstValid != nil {
+        return c.TransferPlayback(ctx, firstValid.ID, false)
+    }
+
+    return fmt.Errorf("no controllable devices available")
 }
+
 
 func resumePlaybackCmd(c *spotify.Client) tea.Cmd {
 	return func() tea.Msg {
