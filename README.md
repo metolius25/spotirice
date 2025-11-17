@@ -8,7 +8,7 @@ A lightweight, ricing‑friendly terminal interface for controlling Spotify. Spo
 
 
 ## Controls
-You can click on the buttons.
+While you can actually click on the buttons too, here are the assigned keybindings:
 | Key / Button | Action |
 |------------------|-------------------------------------------|
 | `p` or `Space` | Toggle play/pause |
@@ -63,5 +63,14 @@ progress_bar = "#00ffff" # cyan
 status = "#808080" # grey
 error = "#ff0000" # red
 ```
+
+
+# Roadmap
+- Like/unlike songs ✅
+- Volume control 🔲
+- Separate screen for searching songs and playlists 🔲
+- Separate screen to view playlists
+- Edit song queue 🔲
+  
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
