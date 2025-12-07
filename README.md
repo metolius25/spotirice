@@ -41,7 +41,7 @@ git clone https://github.com/metolius25/spotirice.git
 cd spotirice
 go build -o spotirice ./...
 ```
-* Refer to [release.yml] for appropriate build flags.
+* Refer to [release.yml](release.yml) for appropriate build flags.
 
 Alternatively, you can install it directly into your `$GOBIN`:
 
