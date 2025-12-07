@@ -33,7 +33,7 @@ While you can actually click on the buttons too, here are the assigned keybindin
 ### Installation
 
 
-1. **Clone the repository** and build the binary:
+1. **Clone the repository** and build the binary*:
 
 
 ```sh
@@ -41,7 +41,7 @@ git clone https://github.com/metolius25/spotirice.git
 cd spotirice
 go build -o spotirice ./...
 ```
-
+* Refer to [release.yml] for appropriate build flags.
 
 Alternatively, you can install it directly into your `$GOBIN`:
 
@@ -77,16 +77,16 @@ error = "#ff0000" # red
 # Roadmap
 - Like/unlike songs ✅
 - Volume control ✅
-- Shuffle & repeat controls ✅
 - Seek within track ✅
 - Help screen ✅
 - Auto-launch Spotify ✅
 - Cross-platform support (Linux, macOS, Windows) ✅
-- Separate screen for searching songs and playlists 🔲
-- Separate screen to view playlists 🔲
+- Song search ✅
+- Playlist search 🔲
 - Edit song queue 🔲
 - Playing device selector 🔲
   
+
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
