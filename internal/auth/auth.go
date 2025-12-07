@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
+	"runtime"
 
 	"github.com/metolius25/spotirice/internal/config"
 	spotify "github.com/zmb3/spotify/v2"
@@ -16,6 +17,20 @@ import (
 )
 
 const redirectURI = "http://127.0.0.1:8000/callback"
+
+// openBrowser opens the specified URL in the default browser (cross-platform)
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", url)
+	default: // linux, freebsd, etc.
+		cmd = exec.Command("xdg-open", url)
+	}
+	return cmd.Start()
+}
 
 func Authenticate() (*spotify.Client, error) {
 	creds, err := config.LoadCredentials()
@@ -28,11 +43,10 @@ func Authenticate() (*spotify.Client, error) {
 		spotifyauth.WithScopes(
 			spotifyauth.ScopeUserReadPrivate,
 			spotifyauth.ScopeUserReadPlaybackState,
-            spotifyauth.ScopeUserReadCurrentlyPlaying,
+			spotifyauth.ScopeUserReadCurrentlyPlaying,
 			spotifyauth.ScopeUserModifyPlaybackState,
-            spotifyauth.ScopeUserLibraryRead,
-            spotifyauth.ScopeUserLibraryModify,
-
+			spotifyauth.ScopeUserLibraryRead,
+			spotifyauth.ScopeUserLibraryModify,
 		),
 		spotifyauth.WithClientID(creds.ClientID),
 		spotifyauth.WithClientSecret(creds.ClientSecret),
@@ -86,7 +100,7 @@ func fullOAuthFlow(auth *spotifyauth.Authenticator) (*spotify.Client, error) {
 
 	url := auth.AuthURL(state)
 	fmt.Println("Please log in to Spotify by visiting the following page in your browser:", url)
-	exec.Command("xdg-open", url).Start()
+	openBrowser(url)
 
 	select {
 	case token := <-ch:

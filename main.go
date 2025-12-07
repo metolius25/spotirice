@@ -2,23 +2,30 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/zmb3/spotify/v2"
 
 	"github.com/metolius25/spotirice/internal/auth"
 	"github.com/metolius25/spotirice/internal/config"
+	"github.com/metolius25/spotirice/internal/spotifylauncher"
 	"github.com/metolius25/spotirice/internal/ui/root"
 )
 
+var Version = "dev"
+
 type clientMsg struct{ Client *spotify.Client }
 type errMsg struct{ Err error }
+type launchingSpotifyMsg struct{}
 
 type model struct {
-	client *spotify.Client
-	status string
-	colors *config.Colors
+	client          *spotify.Client
+	status          string
+	colors          *config.Colors
+	launchAttempted bool
 }
 
 func initialModel(colors *config.Colors) model {
@@ -46,8 +53,8 @@ func (m model) runDeviceAutoSelect() tea.Cmd {
 		}
 
 		if len(devices) == 0 {
-			// Tell RootModel to display this later
-			return clientMsg{Client: m.client}
+			// No devices found - try to launch Spotify
+			return launchingSpotifyMsg{}
 		}
 
 		var valid *spotify.PlayerDevice
@@ -63,6 +70,17 @@ func (m model) runDeviceAutoSelect() tea.Cmd {
 		}
 
 		return clientMsg{Client: m.client}
+	}
+}
+
+func launchSpotifyCmd() tea.Cmd {
+	return func() tea.Msg {
+		if err := spotifylauncher.LaunchSpotify(); err != nil {
+			return errMsg{Err: err}
+		}
+		// Wait for Spotify to start up
+		time.Sleep(3 * time.Second)
+		return nil // Signal to retry device detection
 	}
 }
 
@@ -84,7 +102,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Second time: all done → switch to root UI
-		return root.NewRootModel(msg.Client, m.colors)
+		return root.NewRootModel(msg.Client, m.colors, Version)
+
+	case launchingSpotifyMsg:
+		if !m.launchAttempted {
+			m.launchAttempted = true
+			m.status = "No Spotify devices found. Launching Spotify..."
+			return m, launchSpotifyCmd()
+		}
+		// Already tried, just proceed without device
+		m.status = "No devices found. Please open Spotify manually."
+		return m, func() tea.Msg { return clientMsg{Client: m.client} }
+
+	case nil:
+		// Returned from launchSpotifyCmd, retry device detection
+		if m.client != nil {
+			m.status = "Spotify launched! Detecting devices..."
+			return m, m.runDeviceAutoSelect()
+		}
 
 	case errMsg:
 		m.status = "Error: " + msg.Err.Error()
@@ -102,6 +137,9 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to load colors:", err)
 	}
+
+	// Set initial terminal size to 90x11 (works in most terminals)
+	fmt.Print("\033[8;11;90t")
 
 	p := tea.NewProgram(
 		initialModel(colors),

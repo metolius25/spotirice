@@ -8,6 +8,10 @@
 # Test binary, built with `go test -c`
 *.test
 
+
+# Release files
+release.yml
+
 # Output of the go coverage tool, specifically when run with the
 # -o option to specify an output file.
 *.out
@@ -18,6 +22,10 @@ vendor/
 # IDE settings
 .idea/
 .vscode/
+
+# Built binaries
+spotirice
+spotirice-*
 
 # Most importantly...
 credentials.json

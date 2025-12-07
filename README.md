@@ -1,5 +1,7 @@
 # Spotirice
 
+[![GitHub Release](https://img.shields.io/github/v/release/metolius25/spotirice)](https://github.com/metolius25/spotirice/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A lightweight, ricing‑friendly terminal interface for controlling Spotify. Spotirice is written in **Go** and built with the [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework along with [Lip Gloss](https://github.com/charmbracelet/lipgloss) for styling and the [Spotify Web API](https://github.com/zmb3/spotify) client. It gives you quick access to playback controls, track information and your liked songs within your terminal.
 
@@ -9,17 +11,24 @@ A lightweight, ricing‑friendly terminal interface for controlling Spotify. Spo
 
 ## Controls
 While you can actually click on the buttons too, here are the assigned keybindings:
+
 | Key / Button | Action |
 |------------------|-------------------------------------------|
-| `p` or `Space` | Toggle play/pause |
-| `n` | Skip to the next track |
-| `b` | Go back to the previous track |
-| `l` | Add to/remove from liked songs |
-| `q` or `Ctrl+C` | Quit Spotirice |
+| `p` or `Space`   | Toggle play/pause |
+| `n`              | Skip to the next track |
+| `b`              | Go back to the previous track |
+| `l`              | Add to/remove from liked songs |
+| `+` or `=`       | Volume up (+10%) |
+| `-` or `_`       | Volume down (-10%) |
+| `←` / `→`        | Seek backward/forward 10 seconds |
+| `s` or `/`       | Search for songs |
+| `?`              | Show/hide help screen |
+| `q` or `Ctrl+C`  | Quit Spotirice |
 
 
 
-> **Note**: An instance of Spotify must be running in a device that your authorized account is connected to (It is possible to use the app to control Spotify running on your mobile phone too.). 
+
+> **Note**: An instance of Spotify must be running on a device connected to your authorized account. If no device is found, Spotirice will attempt to launch Spotify automatically.
 
 ### Installation
 
@@ -67,12 +76,17 @@ error = "#ff0000" # red
 
 # Roadmap
 - Like/unlike songs ✅
-- Volume control 🔲
+- Volume control ✅
+- Shuffle & repeat controls ✅
+- Seek within track ✅
+- Help screen ✅
+- Auto-launch Spotify ✅
+- Cross-platform support (Linux, macOS, Windows) ✅
 - Separate screen for searching songs and playlists 🔲
 - Separate screen to view playlists 🔲
 - Edit song queue 🔲
 - Playing device selector 🔲
-- Cross-platform support. (As of now only Linux is supported) 🔲
   
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
